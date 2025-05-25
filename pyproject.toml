@@ -1,0 +1,20 @@
+[project]
+name = "othi-nlp-2501"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "gensim==4.3.3",
+    "numpy==1.26.4",
+    "openpyxl==3.1.2",
+    "polars==1.5.0",
+    "scikit-learn==1.4.2",
+    "sudachipy==0.6.8",
+    "xlsxwriter==3.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.11",
+]
