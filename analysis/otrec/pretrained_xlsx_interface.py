@@ -11,6 +11,7 @@ import polars as pl
 from pathlib import Path
 
 from dwht.carte.load import load_carte
+from dwht.base import flatten_list
 
 cluster_name: Pattern[str] = re.compile(r"^cluster\s+\d+:")
 word_score_pattern: Pattern[str] = re.compile(r"(\S+)\(([-+]?\d+\.\d{4})\)")
@@ -83,6 +84,7 @@ def add_cluster_occurences(
     clusters: list[dict[str, float]],
     similarity_threshold: float = 0.5,
     cluster_groups: Optional[list[list[int]]] = None,
+    cluster_groups_sort_only: bool = False,
     col_name: str = "norm_forms_n",
     result_col_name_prefix: str = "",
 ) -> pl.DataFrame:
@@ -95,6 +97,9 @@ def add_cluster_occurences(
     - f"cl{i:02}" : 回数 (cluster)
     - f"最多クラスタ": 最も回数の多いクラスタ
     それぞれ result_col_name_prefix を列名の prefix として付ける
+    cluster_groups が与えられるときは，そのリスト内の各リストに含まれるクラスタを同一視する
+    ( [ [2,3], [0,4], [1] ] では，クラスタ2と3，クラスタ0と4 は同一視して，それぞれクラスタ0, 1 と読み替える)
+    - cluster_groups_sort_only の時はこれは並び順だけに使う
     """
     # norm_forms_{'_'.join(parts_of_speech)}
     # similarity_threshold を超えるものを使って，そのクラスタに属する単語の
@@ -107,17 +112,28 @@ def add_cluster_occurences(
                     clusters,
                     row.strip().split(),
                     similarity_threshold=similarity_threshold,
-                    cluster_groups=cluster_groups,
+                    cluster_groups=None if cluster_groups_sort_only else cluster_groups,
+                    # cluster_groups_sort_only が True なら状況によらず情報はカウントに使わない
+                    # False であれば， cluster_groups が None であればそのまま，
+                    # そうでなければその値，なのでいずれにせよ渡すので OK
                 ),
                 return_dtype=pl.List(int),
             )
             .alias(f"clcounts_{col_name}")
         ]
     )
+    # TODO: ここ多分 もっと直接的にできるはずだ
     if cluster_groups is None:
-        n_clusters = len(clusters)
+        cluster_indices_to_visit: list[int] = list(range(len(clusters)))
     else:
-        n_clusters = len(cluster_groups)
+        if cluster_groups_sort_only:
+            # クラスタのグループ情報は並びかえにだけ利用する
+            # → グループ情報として持ってるリストを単につなげる
+            cluster_indices_to_visit: list[int] = flatten_list(cluster_groups)
+        else:
+            # クラスタのグループ情報は同一視に使う
+            # → 同一視された塊の個数でいい
+            cluster_indices_to_visit: list[int] = list(range(len(cluster_groups)))
 
     def calc_occ_ratio(counts: list[int], i: int) -> float:
         """
@@ -129,7 +145,7 @@ def add_cluster_occurences(
         else:
             return counts[i] / s
 
-    for i in range(n_clusters):
+    for i in cluster_indices_to_visit:
         df = df.with_columns(
             [
                 pl.col(f"clcounts_{col_name}")
@@ -137,7 +153,7 @@ def add_cluster_occurences(
                 .alias(f"{result_col_name_prefix}clr{i:02}")
             ]
         )
-    for i in range(n_clusters):
+    for i in cluster_indices_to_visit:
         df = df.with_columns(
             [
                 pl.col(f"clcounts_{col_name}")
@@ -178,6 +194,7 @@ def run(
     carte_file: Path,
     cluster_file: Path,
     cluster_groups_file: Optional[Path] = None,
+    cluster_groups_sort_only: bool = False,
     similarity_threshold: float = 0.5,
     col_name: str = "norm_forms_n",
     colname_prefix: str = "",
@@ -195,6 +212,7 @@ def run(
         cl,
         cluster_groups=cg,
         similarity_threshold=similarity_threshold,
+        cluster_groups_sort_only=cluster_groups_sort_only,
         col_name=col_name,
         result_col_name_prefix=colname_prefix,
     )
@@ -218,6 +236,12 @@ def main():
         "--cluster-group",
         type=Path,
         help="newline-separated list of space-separated list of zero-based number. These clusters are treated as a same",
+    )
+    parser.add_argument(
+        "--cluster-group-sort-only",
+        type=bool,
+        default=False,
+        help="When True, the cluster_group is used only for sorting columns",
     )
     parser.add_argument(
         "--colname-prefix",
