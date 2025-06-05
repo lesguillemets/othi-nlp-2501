@@ -17,7 +17,7 @@ import sudachipy.dictionary
 from sudachipy import SplitMode, Morpheme
 
 
-COMMON_PREFIX = "OT_Acorus"
+COMMON_PREFIX = "OT_Brassica"
 SUDACHI_POS_EN_JA = {"n": "名詞", "v": "動詞", "adj": "形容詞", "kj": "形状詞"}
 
 
