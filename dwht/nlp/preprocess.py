@@ -15,7 +15,7 @@ import sudachipy.tokenizer
 import sudachipy.dictionary
 from sudachipy import SplitMode
 
-from dwht.morph.sudachi_interface import SUDACHI_POS_EN_JA as POS_EN_JA
+POS_EN_JA = {"n": "名詞", "v": "動詞", "adj": "形容詞", "kj": "形状詞"}
 
 
 def do_tokenize(
